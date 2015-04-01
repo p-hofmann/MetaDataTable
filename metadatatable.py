@@ -6,7 +6,7 @@ import os
 import gzip
 
 
-class MetaTable:
+class MetadataTable:
 	"""Reading and writing a meta table"""
 	def __init__(self, separator="\t", logger=None):
 		self._logger = logger
@@ -29,12 +29,16 @@ class MetaTable:
 				new_header.remove(title)
 		self._header = new_header
 
-	def read(self, file_path, head=True, gz=False, comment_line=None):
+	def read(self, file_path, head=True, comment_line=None):
 		if comment_line is None:
 			comment_line = ['#']
 
+		assert isinstance(file_path, basestring)
+		assert isinstance(comment_line, basestring)
+		assert isinstance(head, bool)
+
 		fopen = open
-		if gz:
+		if file_path.endswith(".gz"):
 			fopen = gzip.open
 
 		self.clear()
@@ -61,27 +65,29 @@ class MetaTable:
 					self._meta_table[index].append(row[index].rstrip('\n'))
 		file_handler.close()
 
-	def write(self, file_path, head=True, include_value_list=None, exclude_value_list=None, key_header=None, gz=False, compression_level=None):
-		fopen = open
-		if gz:
-			fopen = gzip.open
-			if compression_level is None:
-				compression_level = 5
+	def write(self, file_path, head=True, compression_level=0,
+			  include_value_list=None,
+			  exclude_value_list=None,
+			  key_exclude_header=None):
 
-		if gz:
-			file_handler = fopen(file_path, "w", compression_level)
+		assert isinstance(file_path, basestring)
+		assert 0 <= compression_level < 10
+
+		if compression_level > 0:
+			file_handler = gzip.open(file_path, "w", compression_level)
 		else:
-			file_handler = fopen(file_path, "w")
+			file_handler = open(file_path, "w")
 
 		if head:
 			header = self._separator.join(self._header)
 			file_handler.write(header + '\n')
 		for row_number in range(0, self._number_of_rows):
 			row = []
-			if key_header is not None and include_value_list is not None and self._meta_table[key_header][row_number] not in include_value_list:
-				continue
-			if key_header is not None and exclude_value_list is not None and self._meta_table[key_header][row_number] in exclude_value_list:
-				continue
+			if key_exclude_header is not None:
+				if include_value_list is not None and self._meta_table[key_exclude_header][row_number] not in include_value_list:
+					continue
+				if exclude_value_list is not None and self._meta_table[key_exclude_header][row_number] in exclude_value_list:
+					continue
 			for head in self._header:
 				if len(self._meta_table[head]) > row_number:
 					row.append(str(self._meta_table[head][row_number]))
@@ -97,37 +103,39 @@ class MetaTable:
 		return self._number_of_rows
 
 	def get_entry_index(self, column_name, entry_name):
+		assert isinstance(column_name, (basestring, int))
 		if entry_name in self._meta_table[column_name]:
 			return self._meta_table[column_name].index(entry_name)
 		else:
 			return None
 
 	def has_column(self, column_name):
+		assert isinstance(column_name, (basestring, int))
 		if column_name in self._meta_table:
 			return True
 		else:
 			return False
 
 	def get_column(self, column_name):
+		assert isinstance(column_name, (basestring, int))
 		if column_name in self._meta_table:
 			return list(self._meta_table[column_name])
 		else:
 			return None
 
 	def get_empty_column(self, default_value=''):
+		assert isinstance(default_value, basestring)
 		return [default_value] * self._number_of_rows
 
-	def set_column(self, values=None, column_name=None):
+	def set_column(self, column_name=None, values=None):
 		if column_name is None:
 			column_name = len(self._header)
+		assert isinstance(column_name, (basestring, int))
+
 		if values is None:
-			values = []
-		#if self._number_of_rows == 0:
-		#	self._number_of_rows = len(values)
-		#elif self._number_of_rows < len(values):
-		#	self._number_of_rows = len(values)
-		#	if self._logger:
-		#		self._logger.warning("MetaTable: Inconsistent length of columns! {} - {}".format(self._number_of_rows, len(values)))
+			values = self.get_empty_column()
+		assert isinstance(values, list)
+
 		if column_name not in self._header:
 			self._header.append(column_name)
 		self._meta_table[column_name] = values
@@ -139,34 +147,45 @@ class MetaTable:
 		return row
 
 	def add_row(self, row):
-		diff = set(self._header).difference(set(row.keys()))
-		if len(diff) != 0:
-			if self._logger:
-				self._logger.error("[MetaTable] Bad header, could not add row!")
-			return
+		assert isinstance(row, (list, dict))
+		if isinstance(row, dict):
+			diff = set(self._header).difference(set(row.keys()))
+			if len(diff) != 0:
+				if self._logger:
+					self._logger.error("[MetaTable] Bad header, could not add row!")
+				return
+			for head in self._header:
+				self._meta_table[head].append(row[head])
+		else:
+			assert len(row) == len(self._header)
+			for index_column in range(len(row)):
+				self._meta_table[self._header[index_column]].append(row[index_column])
 		self._number_of_rows += 1
-		for head in self._header:
-			self._meta_table[head].append(row[head])
 
 	def get_cell_value(self, key_header, key_value, value_header):
+		assert isinstance(key_header, (basestring, int))
+		assert isinstance(value_header, (basestring, int))
 		if key_header not in self._header or value_header not in self._header:
+			if self._logger:
+				self._logger.error("[MetaTable] Bad header, could not get value!")
 			return None
 		index = self.get_entry_index(key_header, key_value)
 		if index is not None:
 			return self._meta_table[value_header][index]
 		return None
 
-	def are_valid_header(self, list_of_header):
+	def validate_headers(self, list_of_header):
 		for header in list_of_header:
 			if header not in self._header:
 				return False
 		return True
 
 	def concatenate(self, meta_table, strict=True):
+		assert isinstance(meta_table, MetadataTable)
 		if len(self._header) == 0:
 			strict = False
 		if strict:
-			if not self.are_valid_header(meta_table.get_header()) or not meta_table.are_valid_header(self._header):
+			if not self.validate_headers(meta_table.get_header()) or not meta_table.validate_headers(self._header):
 				if self._logger:
 					self._logger.error("[MetaTable] header are not identical!")
 				return
@@ -184,15 +203,15 @@ class MetaTable:
 		for header in self._header:
 			if len(self._meta_table[header]) < self._number_of_rows:
 				self._meta_table[header].extend([''] * (self._number_of_rows - len(self._meta_table[header])))
-			#self._meta_table[header].extend(meta_table.get_column(header))
 
 	def reduce_to_subset(self, key_header, list_of_values):
+		assert isinstance(key_header, (basestring, int))
+		assert key_header in self._header
 		assert isinstance(list_of_values, list)
 		new_meta_table = {}
 		for header in self._header:
 			new_meta_table[header] = []
 		column = self.get_column(key_header)
-		#for index, value in reversed(list(enumerate(column))):
 		for index, value in enumerate(column):
 			if value not in list_of_values:
 				continue
@@ -202,6 +221,11 @@ class MetaTable:
 		self._number_of_rows = len(self._meta_table[key_header])
 
 	def get_map(self, key_header, value_header):
+		assert isinstance(key_header, (basestring, int))
+		assert isinstance(value_header, (basestring, int))
+		assert key_header in self._header
+		assert value_header in self._header
+
 		if key_header not in self._meta_table:
 			self._logger.error("[MetaTable] key_header '{}' not available!".format(key_header))
 			return None

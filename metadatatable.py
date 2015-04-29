@@ -479,7 +479,7 @@ class MetadataTable(object):
 			@rtype: None
 		"""
 
-		assert isinstance(key_column_name, (basestring, int))
+		assert isinstance(key_column_name, (basestring, int, long))
 		assert isinstance(list_of_values, list)
 		assert self.has_column(key_column_name)
 
@@ -495,7 +495,7 @@ class MetadataTable(object):
 		self._meta_table = new_meta_table
 		self._number_of_rows = len(self._meta_table[key_column_name])
 
-	def get_map(self, key_column_name, value_column_names):
+	def get_map(self, key_column_name, value_column_name):
 		"""
 			Keep rows at key values of a column
 
@@ -503,29 +503,29 @@ class MetadataTable(object):
 
 			@param key_column_name: Column name
 			@type key_column_name: str | unicode
-			@param value_column_names: Column name
-			@type value_column_names: str | unicode
+			@param value_column_name: Column name
+			@type value_column_name: str | unicode
 
 			@return: Nothing
 			@rtype: None
 		"""
 
-		assert isinstance(key_column_name, (basestring, int))
-		assert isinstance(value_column_names, (basestring, int))
+		assert isinstance(key_column_name, (basestring, int, long))
+		assert isinstance(value_column_name, (basestring, int, long))
 		assert self.has_column(key_column_name)
-		assert self.has_column(value_column_names)
+		assert self.has_column(value_column_name)
 
 		if key_column_name not in self._meta_table:
 			self._logger.error("Column name '{}' not available!".format(key_column_name))
 			return None
-		if value_column_names not in self._meta_table:
-			self._logger.error("Column name '{}' not available!".format(value_column_names))
+		if value_column_name not in self._meta_table:
+			self._logger.error("Column name '{}' not available!".format(value_column_name))
 			return None
 		new_map = {}
 		if len(self._meta_table) < 2:
 			return new_map
 		row_keys = self._meta_table[key_column_name]
-		row_values = self._meta_table[value_column_names]
+		row_values = self._meta_table[value_column_name]
 		for index, key in enumerate(row_keys):
 			new_map[key] = row_values[index]
 		return new_map
@@ -544,6 +544,8 @@ class MetadataTable(object):
 			@return: Nothing
 			@rtype: None
 		"""
+		assert isinstance(old_column_name, (basestring, int, long))
+		assert isinstance(new_column_name, (basestring, int, long))
 		assert self.has_column(old_column_name)
 
 		self._list_of_column_names[self._list_of_column_names.index(old_column_name)] = new_column_name

@@ -1,41 +1,111 @@
 #!/usr/bin/env python
 
 __author__ = 'hofmann'
+__version__ = '0.0.1'
 
 import os
+import io
+import StringIO
 import gzip
+from scripts.loggingwrapper import LoggingWrapper
 
 
-class MetadataTable:
+class MetadataTable(object):
+	_label = "MetadataTable"
 	"""Reading and writing a meta table"""
-	def __init__(self, separator="\t", logger=None):
-		self._logger = logger
+	def __init__(self, separator="\t", logfile=None, verbose=True):
+		"""
+			Handle tab separated files
+
+			@attention:
+
+			@param separator: default character assumed to separate values in a file
+			@type separator: str | unicode
+			@param logfile: file handler or file path to a log file
+			@type logfile: file | io.FileIO | StringIO.StringIO | basestring
+			@param verbose: Not verbose means that only warnings and errors will be past to stream
+			@type verbose: bool
+
+			@return: None
+			@rtype: None
+		"""
+		assert logfile is None or isinstance(logfile, basestring) or self._is_stream(logfile)
+		assert isinstance(separator, basestring)
+		assert isinstance(verbose, bool)
+
+		self._logger = LoggingWrapper(self._label, verbose=verbose)
+		if logfile is not None:
+			self._logger.set_log_file(logfile)
+
 		self._number_of_rows = 0
-		self._header = []
+		self._list_of_column_names = []
 		self._meta_table = {}
 		self._separator = separator
 
+	def __exit__(self, type, value, traceback):
+		self.close()
+
+	def __enter__(self):
+		return self
+
+	def close(self):
+		self._logger.close()
+
+	@staticmethod
+	def _is_stream(stream):
+		"""
+			Test for stream
+
+			@param stream: Any kind of stream type
+			@type stream: file | io.FileIO | StringIO.StringIO
+
+			@return: True if stream
+			@rtype: bool
+		"""
+		return isinstance(stream, (file, io.FileIO, StringIO.StringIO)) or stream.__class__ is StringIO.StringIO
+
 	def clear(self):
-		self._header = []
+		self._list_of_column_names = []
 		self._number_of_rows = 0
 		self._meta_table = {}
 
 	def remove_empty_columns(self):
-		new_header = list(self._header)
-		for title in self._header:
+		new_list = list(self._list_of_column_names)
+		for title in self._list_of_column_names:
 			column = set(self.get_column(title))
 			column = [value.strip() for value in column]
 			if len(column) == 1 and '' in column:
-				new_header.remove(title)
-		self._header = new_header
+				new_list.remove(title)
+		self._list_of_column_names = new_list
 
-	def read(self, file_path, head=True, comment_line=None):
+	def read(self, file_path, separator=None, column_names=False, comment_line=None):
+		"""
+			Reading comma or tab separated values in a file as table
+
+			@param file_path: path to file to be opened
+			@type file_path: str | unicode
+			@param separator: default character assumed to separate values in a file
+			@type separator: str | unicode
+			@param column_names: True if column names available
+			@type column_names: bool
+			@param comment_line: character or list of character indication comment lines
+			@type comment_line: str | unicode | list[str|unicode]
+
+			@return: None
+			@rtype: None
+		"""
 		if comment_line is None:
 			comment_line = ['#']
+		elif isinstance(comment_line, basestring):
+			comment_line = [comment_line]
+
+		if separator is None:
+			separator = self._separator
 
 		assert isinstance(file_path, basestring)
-		assert isinstance(comment_line, basestring)
-		assert isinstance(head, bool)
+		assert isinstance(separator, basestring)
+		assert isinstance(comment_line, list)
+		assert isinstance(column_names, bool)
 
 		fopen = open
 		if file_path.endswith(".gz"):
@@ -43,205 +113,438 @@ class MetadataTable:
 
 		self.clear()
 		if not os.path.isfile(file_path):
-			if self._logger:
-				self._logger.error("[MetaTable] no file found at: '{}'".format(file_path))
-			return
-		file_handler = fopen(file_path)
-		if head:
-			self._header = file_handler.readline().strip().split(self._separator)
-			for column_name in self._header:
-				self._meta_table[column_name] = []
-		for line in file_handler:
-			if line[0] in comment_line or len(line.strip().strip('\r')) == 0:
-				continue
-			self._number_of_rows += 1
-			row = line.split(self._separator)
-			for index in range(0, len(row)):
-				if head:
-					self._meta_table[self._header[index]].append(row[index].rstrip('\n'))
-				else:
-					if index not in self._meta_table:
-						self._meta_table[index] = []
-					self._meta_table[index].append(row[index].rstrip('\n'))
-		file_handler.close()
+			msg = "No file found at: '{}'".format(file_path)
+			self._logger.error(msg)
+			raise IOError(msg)
 
-	def write(self, file_path, head=True, compression_level=0,
-			  include_value_list=None,
-			  exclude_value_list=None,
-			  key_exclude_header=None):
+		with fopen(file_path) as file_handler:
+			# read column names
+			if column_names:
+				row = file_handler.readline().rstrip('\n').rstrip('\r')
+				self._list_of_column_names = row.split(separator)
+				for column_name in self._list_of_column_names:
+					self._meta_table[column_name] = []
+
+			# read rows
+			for line in file_handler:
+				row = line.rstrip('\n').rstrip('\r')
+				if line[0] in comment_line or len(row) == 0:
+					continue
+				self._number_of_rows += 1
+				row_cells = row.split(separator)
+				for index in range(len(row_cells)):
+					if column_names:
+						column_name = self._list_of_column_names[index]
+					else:
+						column_name = index
+						if column_name not in self._meta_table:
+							self._meta_table[column_name] = []
+					self._meta_table[column_name].append(row_cells[index].rstrip('\n').rstrip('\r'))
+
+	def write(
+		self, file_path, separator=None, column_names=True, compression_level=0,
+		exclude=None, value_list=None, key_column_names=None):
+		"""
+			Write tab separated files
+
+			@attention: No comments will be written
+
+			@param file_path: path to file to be opened
+			@type file_path: str | unicode
+			@param separator: file handler or file path to a log file
+			@type separator: str | unicode
+			@param column_names: True if column names should be written
+			@type column_names: bool
+			@param compression_level: any value above 0 will compress files
+			@type compression_level: int | long
+			@param exclude: If True, rows with a value in the value_list at the key_column_names are removed, False: all others are removed
+			@type exclude: None | bool
+			@param value_list:
+			@type value_list: list[str|unicode]
+			@param key_column_names: column name of excluded or included rows
+			@type key_column_names: str | unicode
+
+			@return: None
+			@rtype: None
+		"""
+
+		if separator is None:
+			separator = self._separator
 
 		assert isinstance(file_path, basestring)
+		assert isinstance(separator, basestring)
+		assert isinstance(column_names, bool)
+		assert isinstance(compression_level, (int, long))
 		assert 0 <= compression_level < 10
+		assert exclude is None or isinstance(exclude, bool)
+		assert value_list is None or isinstance(value_list, list)
+		assert key_column_names is None or isinstance(value_list, basestring)
 
 		if compression_level > 0:
 			file_handler = gzip.open(file_path, "w", compression_level)
 		else:
 			file_handler = open(file_path, "w")
 
-		if head:
-			header = self._separator.join(self._header)
+		if column_names:
+			if not isinstance(self._list_of_column_names[0], basestring):
+				header = separator.join([str(index) for index in self._list_of_column_names])
+			else:
+				header = separator.join(self._list_of_column_names)
 			file_handler.write(header + '\n')
 		for row_number in range(0, self._number_of_rows):
+			if exclude is not None:
+				if not exclude and self._meta_table[key_column_names][row_number] not in value_list:
+					continue
+				if exclude and self._meta_table[key_column_names][row_number] in value_list:
+					continue
+
 			row = []
-			if key_exclude_header is not None:
-				if include_value_list is not None and self._meta_table[key_exclude_header][row_number] not in include_value_list:
-					continue
-				if exclude_value_list is not None and self._meta_table[key_exclude_header][row_number] in exclude_value_list:
-					continue
-			for head in self._header:
-				if len(self._meta_table[head]) > row_number:
-					row.append(str(self._meta_table[head][row_number]))
-				else:
-					row.append('')
-			file_handler.write(self._separator.join(row) + '\n')
+			for column_names in self._list_of_column_names:
+				row.append(str(self._meta_table[column_names][row_number]))
+			file_handler.write(separator.join(row) + '\n')
 		file_handler.close()
 
-	def get_header(self):
-		return list(self._header)
+	def get_column_names(self):
+		"""
+			Get list of column names
+
+			@attention: returns list of indexes if no column names available
+
+			@return: List of column names or indexes
+			@rtype: list[str|int]
+		"""
+		return list(self._list_of_column_names)
 
 	def get_number_of_rows(self):
+		"""
+			Get number of rows
+
+			@attention:
+
+			@return: Number of rows
+			@rtype: int
+		"""
 		return self._number_of_rows
 
-	def get_entry_index(self, column_name, entry_name):
-		assert isinstance(column_name, (basestring, int))
-		if entry_name in self._meta_table[column_name]:
-			return self._meta_table[column_name].index(entry_name)
+	def get_index_of_value(self, value, column_name):
+		"""
+			Get index of value in a column
+
+			@attention:
+
+			@param value: value in column
+			@type value: str | unicode
+			@param column_name: column name
+			@type column_name: int | long | str | unicode
+
+			@return: index of value in a column, None if not there
+			@rtype: None | int
+		"""
+		assert isinstance(column_name, (basestring, int, long))
+		assert self.has_column(column_name)
+
+		if value in self._meta_table[column_name]:
+			return self._meta_table[column_name].index(value)
 		else:
 			return None
 
 	def has_column(self, column_name):
-		assert isinstance(column_name, (basestring, int))
+		"""
+			Get index of value in a column
+
+			@attention:
+
+			@param column_name: column name
+			@type column_name: int | long | str | unicode
+
+			@return: True if column available
+			@rtype: bool
+		"""
+		assert isinstance(column_name, (basestring, int, long))
+
 		if column_name in self._meta_table:
 			return True
 		else:
 			return False
 
 	def get_column(self, column_name):
-		assert isinstance(column_name, (basestring, int))
+		"""
+			Get a column
+
+			@attention: use index if no name available
+
+			@param column_name: column name
+			@type column_name: int | long | str | unicode
+
+			@return: Cell values of a column
+			@rtype: list[str|unicode]
+		"""
+		assert isinstance(column_name, (basestring, int, long))
+
 		if column_name in self._meta_table:
 			return list(self._meta_table[column_name])
 		else:
 			return None
 
 	def get_empty_column(self, default_value=''):
+		"""
+			Get a empty column with the same number of rows as the current table
+
+			@attention: empty list if number of rows is zero
+
+			@param default_value: column name
+			@type default_value: str | unicode
+
+			@return: Column with cell values set to default value
+			@rtype: list[str|unicode]
+		"""
 		assert isinstance(default_value, basestring)
 		return [default_value] * self._number_of_rows
 
-	def set_column(self, column_name=None, values=None):
-		if column_name is None:
-			column_name = len(self._header)
-		assert isinstance(column_name, (basestring, int))
+	def get_new_row(self, default_value='', as_list=False):
+		"""
+			Get a empty column with the same number of rows as the current table
 
-		if values is None:
-			values = self.get_empty_column()
-		assert isinstance(values, list)
+			@attention: empty list if number of rows is zero
 
-		if column_name not in self._header:
-			self._header.append(column_name)
-		self._meta_table[column_name] = values
+			@param default_value: column name
+			@type default_value: str | unicode
+			@param as_list: return a list if true
+			@type as_list: bool
 
-	def get_new_row(self):
+			@return: Column with cell values set to default value
+			@rtype: dict | list
+		"""
+		assert isinstance(default_value, basestring)
+		assert isinstance(as_list, bool)
+		if as_list:
+			return [default_value] * len(self._list_of_column_names)
 		row = {}
-		for head in self._header:
-			row[head] = ''
+		for column_name in self._list_of_column_names:
+			row[column_name] = default_value
 		return row
 
-	def add_row(self, row):
+	def insert_column(self, list_of_values=None, column_name=None):
+		"""
+			Insert a new column or overwrite an old one.
+
+			@attention: if column_name exists, it will be overwritten
+
+			@param list_of_values: Cell values of table column
+			@type list_of_values: list[str|unicode]
+			@param column_name: column name or index
+			@type column_name: int | long | str | unicode
+
+			@return: Nothing
+			@rtype: None
+		"""
+		if column_name is None:
+			column_name = len(self._list_of_column_names)
+		assert isinstance(column_name, (basestring, int, long))
+		# assert len(values) == self._number_of_rows, ""
+
+		if list_of_values is None:
+			list_of_values = self.get_empty_column()
+		assert isinstance(list_of_values, list)
+		assert len(list_of_values) == self._number_of_rows
+
+		if column_name not in self._list_of_column_names:
+			self._list_of_column_names.append(column_name)
+		self._meta_table[column_name] = list_of_values
+
+	def insert_row(self, row):
+		"""
+			Insert a new row.
+
+			@attention:
+
+			@param row: Cell values of a row
+			@type row: list[str|unicode] | dict
+
+			@return: Nothing
+			@rtype: None
+		"""
 		assert isinstance(row, (list, dict))
+		assert len(row) == len(self._list_of_column_names)
 		if isinstance(row, dict):
-			diff = set(self._header).difference(set(row.keys()))
+			diff = set(self._list_of_column_names).difference(set(row.keys()))
 			if len(diff) != 0:
-				if self._logger:
-					self._logger.error("[MetaTable] Bad header, could not add row!")
-				return
-			for head in self._header:
-				self._meta_table[head].append(row[head])
+				msg = "Bad column names '{}', could not add row!".format(", ".join(diff))
+				self._logger.error(msg)
+				raise ValueError(msg)
+			for column_name in self._list_of_column_names:
+				self._meta_table[column_name].append(row[column_name])
 		else:
-			assert len(row) == len(self._header)
+			# assert len(row) == len(self._header)
 			for index_column in range(len(row)):
-				self._meta_table[self._header[index_column]].append(row[index_column])
+				self._meta_table[self._list_of_column_names[index_column]].append(row[index_column])
 		self._number_of_rows += 1
 
-	def get_cell_value(self, key_header, key_value, value_header):
-		assert isinstance(key_header, (basestring, int))
-		assert isinstance(value_header, (basestring, int))
-		if key_header not in self._header or value_header not in self._header:
-			if self._logger:
-				self._logger.error("[MetaTable] Bad header, could not get value!")
-			return None
-		index = self.get_entry_index(key_header, key_value)
+	def get_cell_value(self, key_column_name, key_value, value_column_names):
+		"""
+			Get the cell value at the index of a key in a key column
+
+			@attention:
+
+			@param key_column_name: column name
+			@type key_column_name: str | unicode | int | long
+			@param value_column_names: column name
+			@type value_column_names: str | unicode | int | long
+			@param key_value: key cell value
+			@type key_value: str | unicode
+
+			@return: None if key value is not there
+			@rtype: str | unicode | None
+		"""
+		assert isinstance(key_column_name, (basestring, int, long))
+		assert isinstance(value_column_names, (basestring, int, long))
+		assert self.has_column(key_column_name) and self.has_column(value_column_names)
+
+		index = self.get_index_of_value(key_column_name, key_value)
 		if index is not None:
-			return self._meta_table[value_header][index]
+			return self._meta_table[value_column_names][index]
 		return None
 
-	def validate_headers(self, list_of_header):
-		for header in list_of_header:
-			if header not in self._header:
+	def validate_column_names(self, list_of_column_names):
+		"""
+			Validate that a list of column names exists in the loaded table
+
+			@attention:
+
+			@param list_of_column_names: column name
+			@type list_of_column_names: list[str|unicode]
+
+			@return: True if all column names exist
+			@rtype: bool
+		"""
+		assert isinstance(list_of_column_names, list)
+		for column_name in list_of_column_names:
+			if column_name not in self._list_of_column_names:
 				return False
 		return True
 
 	def concatenate(self, meta_table, strict=True):
+		"""
+			Concatenate two metadata tables
+
+			@attention:
+
+			@param meta_table: column name
+			@type meta_table: MetadataTable
+			@param strict: if true, both tables must have the same column names, else empty cells will be added where needed
+			@type strict: bool
+
+			@return: Nothing
+			@rtype: None
+		"""
 		assert isinstance(meta_table, MetadataTable)
-		if len(self._header) == 0:
+		assert isinstance(strict, bool)
+
+		if len(self._list_of_column_names) == 0:
 			strict = False
 		if strict:
-			if not self.validate_headers(meta_table.get_header()) or not meta_table.validate_headers(self._header):
-				if self._logger:
-					self._logger.error("[MetaTable] header are not identical!")
-				return
-			for header in self._header:
-				self._meta_table[header].extend(meta_table.get_column(header))
+			valid_foreign_column_names = self.validate_column_names(meta_table.get_column_names())
+			valid_own_column_names = meta_table.validate_column_names(self._list_of_column_names)
+			if not valid_foreign_column_names or not valid_own_column_names:
+				msg = "Column names are not identical!"
+				self._logger.error(msg)
+				raise ValueError(msg)
+			for column_names in self._list_of_column_names:
+				self._meta_table[column_names].extend(meta_table.get_column(column_names))
 		else:
-			for header in meta_table.get_header():
-				if header in self._header:
-					self._meta_table[header].extend(meta_table.get_column(header))
+			for column_names in meta_table.get_column_names():
+				if column_names in self._list_of_column_names:
+					self._meta_table[column_names].extend(meta_table.get_column(column_names))
 				else:
 					new_column = self.get_empty_column()
-					new_column.extend(meta_table.get_column(header))
-					self.set_column(new_column, header)
+					new_column.extend(meta_table.get_column(column_names))
+					self.insert_column(new_column, column_names)
 		self._number_of_rows += meta_table.get_number_of_rows()
-		for header in self._header:
-			if len(self._meta_table[header]) < self._number_of_rows:
-				self._meta_table[header].extend([''] * (self._number_of_rows - len(self._meta_table[header])))
+		for column_names in self._list_of_column_names:
+			if len(self._meta_table[column_names]) < self._number_of_rows:
+				self._meta_table[column_names].extend([''] * (self._number_of_rows - len(self._meta_table[column_names])))
 
-	def reduce_to_subset(self, key_header, list_of_values):
-		assert isinstance(key_header, (basestring, int))
-		assert key_header in self._header
+	def reduce_rows_to_subset(self, list_of_values, key_column_name):
+		"""
+			Keep rows at key values of a column
+
+			@attention:
+
+			@param list_of_values: Cell values of table column
+			@type list_of_values: list[str|unicode]
+			@param key_column_name: Column name
+			@type key_column_name: str | unicode
+
+			@return: Nothing
+			@rtype: None
+		"""
+
+		assert isinstance(key_column_name, (basestring, int))
 		assert isinstance(list_of_values, list)
+		assert self.has_column(key_column_name)
+
 		new_meta_table = {}
-		for header in self._header:
-			new_meta_table[header] = []
-		column = self.get_column(key_header)
+		for column_name in self._list_of_column_names:
+			new_meta_table[column_name] = []
+		column = self.get_column(key_column_name)
 		for index, value in enumerate(column):
 			if value not in list_of_values:
 				continue
-			for header in self._header:
-				new_meta_table[header].append(self._meta_table[header][index])
+			for column_name in self._list_of_column_names:
+				new_meta_table[column_name].append(self._meta_table[column_name][index])
 		self._meta_table = new_meta_table
-		self._number_of_rows = len(self._meta_table[key_header])
+		self._number_of_rows = len(self._meta_table[key_column_name])
 
-	def get_map(self, key_header, value_header):
-		assert isinstance(key_header, (basestring, int))
-		assert isinstance(value_header, (basestring, int))
+	def get_map(self, key_column_name, value_column_names):
+		"""
+			Keep rows at key values of a column
 
-		if key_header not in self._meta_table:
-			self._logger.error("[MetaTable] key_header '{}' not available!".format(key_header))
+			@attention:
+
+			@param key_column_name: Column name
+			@type key_column_name: str | unicode
+			@param value_column_names: Column name
+			@type value_column_names: str | unicode
+
+			@return: Nothing
+			@rtype: None
+		"""
+
+		assert isinstance(key_column_name, (basestring, int))
+		assert isinstance(value_column_names, (basestring, int))
+		assert self.has_column(key_column_name)
+		assert self.has_column(value_column_names)
+
+		if key_column_name not in self._meta_table:
+			self._logger.error("Column name '{}' not available!".format(key_column_name))
 			return None
-		if value_header not in self._meta_table:
-			self._logger.error("[MetaTable] value_header '{}' not available!".format(value_header))
+		if value_column_names not in self._meta_table:
+			self._logger.error("Column name '{}' not available!".format(value_column_names))
 			return None
 		new_map = {}
 		if len(self._meta_table) < 2:
 			return new_map
-		row_keys = self._meta_table[key_header]
-		row_values = self._meta_table[value_header]
+		row_keys = self._meta_table[key_column_name]
+		row_values = self._meta_table[value_column_names]
 		for index, key in enumerate(row_keys):
 			new_map[key] = row_values[index]
 		return new_map
 
-	def rename_column(self, old_id, new_id):
-		if old_id not in self._header:
-			self._logger.error("[MetaTable] column name '{}' not available!")
-			return None
-		self._header[self._header.index(old_id)] = new_id
-		self._meta_table[new_id] = self._meta_table.pop(old_id)
+	def rename_column(self, old_column_name, new_column_name):
+		"""
+			Keep rows at key values of a column
+
+			@attention:
+
+			@param old_column_name: Column name
+			@type old_column_name: str | unicode
+			@param new_column_name: Column name
+			@type new_column_name: str | unicode
+
+			@return: Nothing
+			@rtype: None
+		"""
+		assert self.has_column(old_column_name)
+
+		self._list_of_column_names[self._list_of_column_names.index(old_column_name)] = new_column_name
+		self._meta_table[new_column_name] = self._meta_table.pop(old_column_name)

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 __author__ = 'hofmann'
-__version__ = '0.0.1'
+__version__ = '0.0.2'
 
 import os
 import io
@@ -118,21 +118,33 @@ class MetadataTable(object):
 			raise IOError(msg)
 
 		with fopen(file_path) as file_handler:
+			self._logger.info("Reading file: '{}'".format(file_path))
+
 			# read column names
 			if column_names:
 				row = file_handler.readline().rstrip('\n').rstrip('\r')
 				self._list_of_column_names = row.split(separator)
 				for column_name in self._list_of_column_names:
 					self._meta_table[column_name] = []
-
+			else:
+				row = file_handler.readline().rstrip('\n').rstrip('\r')
+				number_of_columns = len(row.split(separator))
+				self._list_of_column_names = range(number_of_columns)
+				file_handler.seek(0)
 			# read rows
+			row_count = 0
 			for line in file_handler:
+				row_count += 1
 				row = line.rstrip('\n').rstrip('\r')
 				if line[0] in comment_line or len(row) == 0:
 					continue
 				self._number_of_rows += 1
 				row_cells = row.split(separator)
-				for index in range(len(row_cells)):
+				if len(self._list_of_column_names) != 0 and len(self._list_of_column_names) != len(row_cells):
+					msg = "Format error. Bad number of values in row {}".format(row_count)
+					self._logger.error(msg)
+					raise ValueError(msg)
+				for index, value in enumerate(row_cells):
 					if column_names:
 						column_name = self._list_of_column_names[index]
 					else:
@@ -226,7 +238,7 @@ class MetadataTable(object):
 		"""
 		return self._number_of_rows
 
-	def get_index_of_value(self, value, column_name):
+	def get_row_index_of_value(self, value, column_name):
 		"""
 			Get index of value in a column
 
@@ -400,7 +412,7 @@ class MetadataTable(object):
 		assert isinstance(value_column_names, (basestring, int, long))
 		assert self.has_column(key_column_name) and self.has_column(value_column_names)
 
-		index = self.get_index_of_value(key_column_name, key_value)
+		index = self.get_row_index_of_value(key_column_name, key_value)
 		if index is not None:
 			return self._meta_table[value_column_names][index]
 		return None
@@ -420,6 +432,7 @@ class MetadataTable(object):
 		assert isinstance(list_of_column_names, list)
 		for column_name in list_of_column_names:
 			if column_name not in self._list_of_column_names:
+				print self._list_of_column_names
 				return False
 		return True
 

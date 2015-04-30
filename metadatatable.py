@@ -30,17 +30,17 @@ class MetadataTable(object):
 			@rtype: None
 		"""
 		assert logfile is None or isinstance(logfile, basestring) or self._is_stream(logfile)
-		assert isinstance(separator, basestring)
-		assert isinstance(verbose, bool)
+		assert isinstance(separator, basestring), "separator must be string"
+		assert isinstance(verbose, bool), "verbose must be true or false"
 
 		self._logger = LoggingWrapper(self._label, verbose=verbose)
 		if logfile is not None:
 			self._logger.set_log_file(logfile)
 
 		self._number_of_rows = 0
-		self._list_of_column_names = []
 		self._meta_table = {}
 		self._separator = separator
+		self._list_of_column_names = []
 
 	def __exit__(self, type, value, traceback):
 		self.close()
@@ -65,18 +65,18 @@ class MetadataTable(object):
 		return isinstance(stream, (file, io.FileIO, StringIO.StringIO)) or stream.__class__ is StringIO.StringIO
 
 	def clear(self):
-		self._list_of_column_names = []
 		self._number_of_rows = 0
 		self._meta_table = {}
+		self._list_of_column_names = []
 
 	def remove_empty_columns(self):
-		new_list = list(self._list_of_column_names)
-		for title in self._list_of_column_names:
-			column = set(self.get_column(title))
+		for column_name in self.get_column_names():
+			column = set(self.get_column(column_name))
 			column = [value.strip() for value in column]
 			if len(column) == 1 and '' in column:
-				new_list.remove(title)
-		self._list_of_column_names = new_list
+				self._meta_table.pop(column_name)
+				index = self._list_of_column_names.index(column_name)
+				self._list_of_column_names.pop(index)
 
 	def read(self, file_path, separator=None, column_names=False, comment_line=None):
 		"""
@@ -126,11 +126,8 @@ class MetadataTable(object):
 				self._list_of_column_names = row.split(separator)
 				for column_name in self._list_of_column_names:
 					self._meta_table[column_name] = []
-			else:
-				row = file_handler.readline().rstrip('\n').rstrip('\r')
-				number_of_columns = len(row.split(separator))
-				self._list_of_column_names = range(number_of_columns)
-				file_handler.seek(0)
+			# TODO: test for unique names
+
 			# read rows
 			row_count = 0
 			for line in file_handler:
@@ -140,7 +137,8 @@ class MetadataTable(object):
 					continue
 				self._number_of_rows += 1
 				row_cells = row.split(separator)
-				if len(self._list_of_column_names) != 0 and len(self._list_of_column_names) != len(row_cells):
+				number_of_columns = len(self.get_column_names())
+				if number_of_columns != 0 and number_of_columns != len(row_cells):
 					msg = "Format error. Bad number of values in row {}".format(row_count)
 					self._logger.error(msg)
 					raise ValueError(msg)
@@ -152,6 +150,9 @@ class MetadataTable(object):
 						if column_name not in self._meta_table:
 							self._meta_table[column_name] = []
 					self._meta_table[column_name].append(row_cells[index].rstrip('\n').rstrip('\r'))
+
+			if not column_names:
+				self._list_of_column_names = sorted(self._meta_table.keys())
 
 	def write(
 		self, file_path, separator=None, column_names=True, compression_level=0,
@@ -238,6 +239,17 @@ class MetadataTable(object):
 		"""
 		return self._number_of_rows
 
+	def get_number_of_columns(self):
+		"""
+			Get number of columns
+
+			@attention:
+
+			@return: Number of rows
+			@rtype: int
+		"""
+		return len(self.get_column_names())
+
 	def get_row_index_of_value(self, value, column_name):
 		"""
 			Get index of value in a column
@@ -253,7 +265,7 @@ class MetadataTable(object):
 			@rtype: None | int
 		"""
 		assert isinstance(column_name, (basestring, int, long))
-		assert self.has_column(column_name)
+		assert self.has_column(column_name), "Column '{}' not found!".format(column_name)
 
 		if value in self._meta_table[column_name]:
 			return self._meta_table[column_name].index(value)
@@ -392,7 +404,7 @@ class MetadataTable(object):
 				self._meta_table[self._list_of_column_names[index_column]].append(row[index_column])
 		self._number_of_rows += 1
 
-	def get_cell_value(self, key_column_name, key_value, value_column_names):
+	def get_cell_value(self, key_column_name, key_value, value_column_name):
 		"""
 			Get the cell value at the index of a key in a key column
 
@@ -400,8 +412,8 @@ class MetadataTable(object):
 
 			@param key_column_name: column name
 			@type key_column_name: str | unicode | int | long
-			@param value_column_names: column name
-			@type value_column_names: str | unicode | int | long
+			@param value_column_name: column name
+			@type value_column_name: str | unicode | int | long
 			@param key_value: key cell value
 			@type key_value: str | unicode
 
@@ -409,12 +421,13 @@ class MetadataTable(object):
 			@rtype: str | unicode | None
 		"""
 		assert isinstance(key_column_name, (basestring, int, long))
-		assert isinstance(value_column_names, (basestring, int, long))
-		assert self.has_column(key_column_name) and self.has_column(value_column_names)
+		assert isinstance(value_column_name, (basestring, int, long))
+		assert self.has_column(key_column_name), "Column '{}' not found!".format(key_column_name)
+		assert self.has_column(value_column_name), "Column '{}' not found!".format(value_column_name)
 
-		index = self.get_row_index_of_value(key_column_name, key_value)
+		index = self.get_row_index_of_value(key_value, key_column_name)
 		if index is not None:
-			return self._meta_table[value_column_names][index]
+			return self._meta_table[value_column_name][index]
 		return None
 
 	def validate_column_names(self, list_of_column_names):
@@ -494,7 +507,7 @@ class MetadataTable(object):
 
 		assert isinstance(key_column_name, (basestring, int, long))
 		assert isinstance(list_of_values, list)
-		assert self.has_column(key_column_name)
+		assert self.has_column(key_column_name), "Column '{}' not found!".format(key_column_name)
 
 		new_meta_table = {}
 		for column_name in self._list_of_column_names:
@@ -525,8 +538,8 @@ class MetadataTable(object):
 
 		assert isinstance(key_column_name, (basestring, int, long))
 		assert isinstance(value_column_name, (basestring, int, long))
-		assert self.has_column(key_column_name)
-		assert self.has_column(value_column_name)
+		assert self.has_column(key_column_name), "Column '{}' not found!".format(key_column_name)
+		assert self.has_column(value_column_name), "Column '{}' not found!".format(value_column_name)
 
 		if key_column_name not in self._meta_table:
 			self._logger.error("Column name '{}' not available!".format(key_column_name))
@@ -559,7 +572,7 @@ class MetadataTable(object):
 		"""
 		assert isinstance(old_column_name, (basestring, int, long))
 		assert isinstance(new_column_name, (basestring, int, long))
-		assert self.has_column(old_column_name)
+		assert self.has_column(old_column_name), "Column '{}' not found!".format(old_column_name)
 
 		self._list_of_column_names[self._list_of_column_names.index(old_column_name)] = new_column_name
 		self._meta_table[new_column_name] = self._meta_table.pop(old_column_name)

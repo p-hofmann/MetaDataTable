@@ -553,6 +553,8 @@ class MetadataTable(object):
 		row_keys = self._meta_table[key_column_name]
 		row_values = self._meta_table[value_column_name]
 		for index, key in enumerate(row_keys):
+			if key in new_map:
+				self._logger.warning("Key column is not unique! Key: '{}'".format(key))
 			new_map[key] = row_values[index]
 		return new_map
 

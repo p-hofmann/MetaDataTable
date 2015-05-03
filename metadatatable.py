@@ -69,6 +69,11 @@ class MetadataTable(object):
 		self._meta_table = {}
 		self._list_of_column_names = []
 
+	def _has_unique_columns(self, list_of_column_names=None):
+		if list_of_column_names is None:
+			list_of_column_names = self._list_of_column_names
+		return len(list_of_column_names) == len(set(list_of_column_names))
+
 	def remove_empty_columns(self):
 		for column_name in self.get_column_names():
 			column = set(self.get_column(column_name))
@@ -123,10 +128,11 @@ class MetadataTable(object):
 			# read column names
 			if column_names:
 				row = file_handler.readline().rstrip('\n').rstrip('\r')
-				self._list_of_column_names = row.split(separator)
+				list_of_column_names = row.split(separator)
+				assert self._has_unique_columns(list_of_column_names), "Column names must be unique!"
+				self._list_of_column_names = list_of_column_names
 				for column_name in self._list_of_column_names:
 					self._meta_table[column_name] = []
-			# TODO: test for unique names
 
 			# read rows
 			row_count = 0

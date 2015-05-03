@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 __author__ = 'hofmann'
-__version__ = '0.0.2'
+__version__ = '0.0.3'
 
 import os
 import io
@@ -444,10 +444,14 @@ class MetadataTable(object):
 			@rtype: bool
 		"""
 		assert isinstance(list_of_column_names, list)
+
+		list_of_invalid_column_names = []
 		for column_name in list_of_column_names:
-			if column_name not in self._list_of_column_names:
-				print self._list_of_column_names
-				return False
+			if not self.has_column(column_name):
+				list_of_invalid_column_names.append(column_name)
+				self._logger.info("Invalid columns: {}".format(", ".join(list_of_invalid_column_names)))
+		if len(list_of_invalid_column_names) > 0:
+			return False
 		return True
 
 	def concatenate(self, meta_table, strict=True):
@@ -476,20 +480,19 @@ class MetadataTable(object):
 				msg = "Column names are not identical!"
 				self._logger.error(msg)
 				raise ValueError(msg)
-			for column_names in self._list_of_column_names:
-				self._meta_table[column_names].extend(meta_table.get_column(column_names))
+			for column_name in self._list_of_column_names:
+				self._meta_table[column_name].extend(meta_table.get_column(column_name))
 		else:
-			for column_names in meta_table.get_column_names():
-				if column_names in self._list_of_column_names:
-					self._meta_table[column_names].extend(meta_table.get_column(column_names))
-				else:
-					new_column = self.get_empty_column()
-					new_column.extend(meta_table.get_column(column_names))
-					self.insert_column(new_column, column_names)
+			for column_name in meta_table.get_column_names():
+				if column_name not in self._list_of_column_names:
+					self.insert_column(self.get_empty_column(), column_name)
+				self._meta_table[column_name].extend(meta_table.get_column(column_name))
+
 		self._number_of_rows += meta_table.get_number_of_rows()
-		for column_names in self._list_of_column_names:
-			if len(self._meta_table[column_names]) < self._number_of_rows:
-				self._meta_table[column_names].extend([''] * (self._number_of_rows - len(self._meta_table[column_names])))
+
+		for column_name in self._list_of_column_names:
+			if len(self._meta_table[column_name]) < self._number_of_rows:
+				self._meta_table[column_name].extend([''] * (self._number_of_rows - len(self._meta_table[column_name])))
 
 	def reduce_rows_to_subset(self, list_of_values, key_column_name):
 		"""

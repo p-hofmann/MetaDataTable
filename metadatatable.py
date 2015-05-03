@@ -325,7 +325,7 @@ class MetadataTable(object):
 		assert isinstance(default_value, basestring)
 		return [default_value] * self._number_of_rows
 
-	def get_new_row(self, default_value='', as_list=False):
+	def get_empty_row(self, default_value='', as_list=False):
 		"""
 			Get a empty column with the same number of rows as the current table
 

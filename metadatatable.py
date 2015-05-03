@@ -370,7 +370,8 @@ class MetadataTable(object):
 		if list_of_values is None:
 			list_of_values = self.get_empty_column()
 		assert isinstance(list_of_values, list)
-		assert len(list_of_values) == self._number_of_rows
+		assert len(list_of_values) == self._number_of_rows, "Bad amount of values: {}/{}".format(
+			len(list_of_values), self._number_of_rows)
 
 		if column_name not in self._list_of_column_names:
 			self._list_of_column_names.append(column_name)

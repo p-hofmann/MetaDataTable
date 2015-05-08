@@ -538,9 +538,9 @@ class MetadataTable(object):
 			@attention:
 
 			@param key_column_name: Column name
-			@type key_column_name: str | unicode
+			@type key_column_name: str | unicode | int | long
 			@param value_column_name: Column name
-			@type value_column_name: str | unicode
+			@type value_column_name: str | unicode | int | long
 
 			@return: Nothing
 			@rtype: None

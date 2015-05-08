@@ -542,8 +542,8 @@ class MetadataTable(object):
 			@param value_column_name: Column name
 			@type value_column_name: str | unicode | int | long
 
-			@return: Nothing
-			@rtype: None
+			@return: map
+			@rtype: dict[str|unicode, str|unicode]
 		"""
 
 		assert isinstance(key_column_name, (basestring, int, long))

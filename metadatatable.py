@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 __author__ = 'hofmann'
-__version__ = '0.0.4'
+__version__ = '0.0.5'
 
 import os
 import io
@@ -503,7 +503,7 @@ class MetadataTable(Compress):
 		self._meta_table = new_meta_table
 		self._number_of_rows = len(self._meta_table[key_column_name])
 
-	def get_map(self, key_column_name, value_column_name):
+	def get_map(self, key_column_name, value_column_name, unique_key=True):
 		"""
 			Keep rows at key values of a column
 
@@ -516,6 +516,8 @@ class MetadataTable(Compress):
 
 			@return: map
 			@rtype: dict[str|unicode, str|unicode]
+
+			@raises: KeyError
 		"""
 
 		assert isinstance(key_column_name, (basestring, int, long))
@@ -535,8 +537,10 @@ class MetadataTable(Compress):
 		row_keys = self._meta_table[key_column_name]
 		row_values = self._meta_table[value_column_name]
 		for index, key in enumerate(row_keys):
-			if key in new_map:
-				self._logger.warning("Key column is not unique! Key: '{}'".format(key))
+			if unique_key and key in new_map:
+				msg = "Key column is not unique! Key: '{}'".format(key)
+				self._logger.error(msg)
+				raise KeyError(msg)
 			new_map[key] = row_values[index]
 		return new_map
 

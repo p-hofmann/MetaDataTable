@@ -1,18 +1,19 @@
 #!/usr/bin/env python
 
 __author__ = 'hofmann'
-__version__ = '0.0.3'
+__version__ = '0.0.4'
 
 import os
 import io
 import StringIO
-import gzip
-from scripts.loggingwrapper import LoggingWrapper
+from scripts.Archive.compress import Compress
 
 
-class MetadataTable(object):
+class MetadataTable(Compress):
+	"""Reading and writing a metadata table"""
+
 	_label = "MetadataTable"
-	"""Reading and writing a meta table"""
+
 	def __init__(self, separator="\t", logfile=None, verbose=True):
 		"""
 			Handle tab separated files
@@ -32,37 +33,12 @@ class MetadataTable(object):
 		assert logfile is None or isinstance(logfile, basestring) or self._is_stream(logfile)
 		assert isinstance(separator, basestring), "separator must be string"
 		assert isinstance(verbose, bool), "verbose must be true or false"
-
-		self._logger = LoggingWrapper(self._label, verbose=verbose)
-		if logfile is not None:
-			self._logger.set_log_file(logfile)
+		super(MetadataTable, self).__init__(logfile=logfile, verbose=verbose)
 
 		self._number_of_rows = 0
 		self._meta_table = {}
 		self._separator = separator
 		self._list_of_column_names = []
-
-	def __exit__(self, type, value, traceback):
-		self.close()
-
-	def __enter__(self):
-		return self
-
-	def close(self):
-		self._logger.close()
-
-	@staticmethod
-	def _is_stream(stream):
-		"""
-			Test for stream
-
-			@param stream: Any kind of stream type
-			@type stream: file | io.FileIO | StringIO.StringIO
-
-			@return: True if stream
-			@rtype: bool
-		"""
-		return isinstance(stream, (file, io.FileIO, StringIO.StringIO)) or stream.__class__ is StringIO.StringIO
 
 	def clear(self):
 		self._number_of_rows = 0
@@ -112,17 +88,13 @@ class MetadataTable(object):
 		assert isinstance(comment_line, list)
 		assert isinstance(column_names, bool)
 
-		fopen = open
-		if file_path.endswith(".gz"):
-			fopen = gzip.open
-
 		self.clear()
 		if not os.path.isfile(file_path):
 			msg = "No file found at: '{}'".format(file_path)
 			self._logger.error(msg)
 			raise IOError(msg)
 
-		with fopen(file_path) as file_handler:
+		with self.open(file_path) as file_handler:
 			self._logger.info("Reading file: '{}'".format(file_path))
 
 			# read column names
@@ -200,7 +172,7 @@ class MetadataTable(object):
 		assert key_column_names is None or isinstance(value_list, basestring)
 
 		if compression_level > 0:
-			file_handler = gzip.open(file_path, "w", compression_level)
+			file_handler = self.open(file_path, "w", compression_level)
 		else:
 			file_handler = open(file_path, "w")
 

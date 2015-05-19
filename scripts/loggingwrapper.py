@@ -1,5 +1,5 @@
 __author__ = 'hofmann'
-__version__ = '0.0.7'
+__version__ = '0.0.9'
 
 import sys
 import io
@@ -44,7 +44,7 @@ class LoggingWrapper(object):
 		assert isinstance(verbose, bool)
 		assert message_format is None or isinstance(message_format, basestring)
 		assert message_format is None or isinstance(date_format, basestring)
-		assert stream is None or self._is_stream(stream)
+		assert stream is None or self.is_stream(stream)
 
 		if message_format is None:
 			message_format = "%(asctime)s %(levelname)s: [%(name)s] %(message)s"
@@ -66,19 +66,22 @@ class LoggingWrapper(object):
 				self.add_log_stream(stream=stream, level=logging.WARNING)
 
 	def __exit__(self, type, value, traceback):
-		self.close()
+		self._close()
 
 	def __enter__(self):
 		return self
 
+	def __del__(self):
+		self._close()
+
 	@staticmethod
-	def _is_stream(stream):
+	def is_stream(stream):
 		return isinstance(stream, (file, io.FileIO, StringIO.StringIO)) or stream.__class__ is StringIO.StringIO
 
 	def get_label(self):
 		return self._label
 
-	def close(self):
+	def _close(self):
 		"""
 			Close all logfile handler, unless given as stream.
 			Remove all stream handler from handler list, stopping the log service
@@ -209,7 +212,7 @@ class LoggingWrapper(object):
 			@return: None
 			@rtype: None
 		"""
-		assert self._is_stream(stream)
+		assert self.is_stream(stream)
 		# assert isinstance(stream, (file, io.FileIO))
 		assert level in self._levelNames
 
@@ -234,7 +237,7 @@ class LoggingWrapper(object):
 			@return: None
 			@rtype: None
 		"""
-		assert isinstance(log_file, basestring) or self._is_stream(log_file)
+		assert isinstance(log_file, basestring) or self.is_stream(log_file)
 		assert level in self._levelNames
 
 		if LoggingWrapper._map_logfile_handler[self._label] is not None:
@@ -242,7 +245,7 @@ class LoggingWrapper(object):
 			LoggingWrapper._map_logfile_handler[self._label].close()
 			LoggingWrapper._map_logfile_handler[self._label] = None
 
-		if isinstance(log_file, (file, io.FileIO)):
+		if self.is_stream(log_file):
 			self.add_log_stream(stream=log_file, level=level)
 			return
 

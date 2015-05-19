@@ -1,10 +1,11 @@
 __author__ = 'hofmann'
-__version__ = '0.0.5'
+__version__ = '0.0.8'
 
 import os
 import glob
 import math
 import string
+from io import FileIO
 from numbers import Number
 from scripts.loggingwrapper import LoggingWrapper
 
@@ -32,17 +33,23 @@ class Validator(object):
 		if logfile:
 			self._logger.set_log_file(logfile)
 
-		self._logfile = logfile
+		self._logfile = None
+		if isinstance(logfile, basestring):
+			self._logfile = logfile
+		elif isinstance(logfile, (file, FileIO)):
+			self._logfile = logfile.name
 		self._verbose = verbose
 
 	def __exit__(self, type, value, traceback):
-		self.close()
+		self._close()
 
 	def __enter__(self):
 		return self
 
-	def close(self):
-		self._logger.close()
+	def __del__(self):
+		self._close()
+
+	def _close(self):
 		self._logger = None
 
 	def validate_file(self, file_path, executable=False, key=None, silent=False):
@@ -73,10 +80,21 @@ class Validator(object):
 				self._logger.error("{}Invalid directory".format(prefix))
 			return False
 
-		file_path = self.get_full_path(file_path)
-		parent_directory = os.path.dirname(file_path)
-		if not self.validate_dir(parent_directory, key=key):
+		# file_path = self.get_full_path(file_path)
+		parent_directory, filename = os.path.split(file_path)
+
+		if parent_directory and not self.validate_dir(parent_directory, key=key):
+			if not silent:
+				self._logger.error("{}Directory of file does not exist: '{}'".format(prefix, parent_directory))
 			return False
+
+		if executable and not parent_directory and not os.path.isfile(file_path):
+			for path in os.environ["PATH"].split(os.pathsep):
+				path = path.strip('"')
+				exe_file = os.path.join(path, filename)
+				if os.path.isfile(exe_file):
+					file_path = exe_file
+					break
 
 		if not os.path.isfile(file_path):
 			if not silent:

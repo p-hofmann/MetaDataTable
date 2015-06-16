@@ -1,56 +1,47 @@
 __author__ = 'hofmann'
-__version__ = '0.0.8'
+__version__ = '0.1.2'
 
 import os
 import glob
 import math
 import string
-from io import FileIO
 from numbers import Number
-from scripts.loggingwrapper import LoggingWrapper
+from scripts.loggingwrapper import DefaultLogging
 
 
-class Validator(object):
+class Validator(DefaultLogging):
 
-	_map_logfile_handler = dict()
 	_label = "Validator"
 
-	def __init__(self, logfile=None, verbose=False):
+	_boolean_states = {
+		'yes': True, 'true': True, 'on': True,
+		'no': False, 'false': False, 'off': False,
+		'y': True, 't': True, 'n': False, 'f': False}
+
+	def is_boolean_state(self, word):
 		"""
-			Collection of methods for value validations
+			Test for boolean state
 
-			@attention: config_file argument may be file path or stream.
+			@param word: A word
+			@type word: str | unicode
 
-			@param logfile: file handler or file path to a log file
-			@type logfile: file | FileIO | None
-			@param verbose: Not verbose means that only warnings and errors will be past to stream
-			@type verbose: bool
-
-			@return: None
-			@rtype: None
+			@return: True if word is identified as an word equivalent to true or false
+			@rtype: bool
 		"""
-		self._logger = LoggingWrapper(self._label, verbose=verbose)
-		if logfile:
-			self._logger.set_log_file(logfile)
+		return str(word) in self._boolean_states
 
-		self._logfile = None
-		if isinstance(logfile, basestring):
-			self._logfile = logfile
-		elif isinstance(logfile, (file, FileIO)):
-			self._logfile = logfile.name
-		self._verbose = verbose
+	def get_boolean_state(self, word):
+		"""
+			Get boolean from word
 
-	def __exit__(self, type, value, traceback):
-		self._close()
+			@param word: A word
+			@type word: str | unicode
 
-	def __enter__(self):
-		return self
-
-	def __del__(self):
-		self._close()
-
-	def _close(self):
-		self._logger = None
+			@return: True if word is identified as an word equivalent to true
+			@rtype: bool
+		"""
+		assert str(word) in self._boolean_states
+		return self._boolean_states[str(word)]
 
 	def validate_file(self, file_path, executable=False, key=None, silent=False):
 		"""

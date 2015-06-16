@@ -1,5 +1,5 @@
 __author__ = 'hofmann'
-__version__ = '0.0.9'
+__version__ = '0.1.0'
 
 import sys
 import io
@@ -258,3 +258,58 @@ class LoggingWrapper(object):
 		except Exception:
 			sys.stderr.write("[LoggingWrapper] Could not open '{}' for logging\n".format(log_file))
 			return
+
+
+class DefaultLogging(object):
+
+	_label = "Logging"
+
+	def __init__(self, logfile=None, verbose=False):
+		"""
+			Prototype class for any class needing a logger
+
+			@attention:
+
+			@param logfile: file handler or file path to a log file
+			@type logfile: file | FileIO | StringIO | basestring
+			@param verbose: Not verbose means that only warnings and errors will be past to stream
+			@type verbose: bool
+
+			@return: None
+			@rtype: None
+		"""
+		self._logger = LoggingWrapper(self._label, verbose=verbose)
+		if logfile:
+			self._logger.set_log_file(logfile)
+
+		self._logfile = None
+		if isinstance(logfile, basestring):
+			self._logfile = logfile
+		elif isinstance(logfile, (file, io.FileIO)):
+			self._logfile = logfile.name
+		self._verbose = verbose
+
+	def __exit__(self, type, value, traceback):
+		self._close()
+
+	def __enter__(self):
+		return self
+
+	def __del__(self):
+		self._close()
+
+	def _close(self):
+		self._logger = None
+
+	@staticmethod
+	def is_stream(stream):
+		"""
+			Test for streams
+
+			@param stream: Any kind of stream type
+			@type stream: file | io.FileIO | StringIO.StringIO
+
+			@return: True if stream
+			@rtype: bool
+		"""
+		return isinstance(stream, (file, io.FileIO, StringIO.StringIO)) or stream.__class__ is StringIO.StringIO

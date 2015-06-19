@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 __author__ = 'hofmann'
-__version__ = '0.0.5'
+__version__ = '0.0.6'
 
 import os
 import io
@@ -133,7 +133,7 @@ class MetadataTable(Compress):
 				self._list_of_column_names = sorted(self._meta_table.keys())
 
 	def write(
-		self, file_path, separator=None, column_names=True, compression_level=0,
+		self, file_path, separator=None, column_names=False, compression_level=0,
 		exclude=None, value_list=None, key_column_names=None):
 		"""
 			Write tab separated files

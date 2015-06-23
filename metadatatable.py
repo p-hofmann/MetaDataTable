@@ -84,16 +84,12 @@ class MetadataTable(Compress):
 			separator = self._separator
 
 		assert isinstance(file_path, basestring)
+		assert self.validate_file(file_path)
 		assert isinstance(separator, basestring)
 		assert isinstance(comment_line, list)
 		assert isinstance(column_names, bool)
 
 		self.clear()
-		if not os.path.isfile(file_path):
-			msg = "No file found at: '{}'".format(file_path)
-			self._logger.error(msg)
-			raise IOError(msg)
-
 		with self.open(file_path) as file_handler:
 			self._logger.info("Reading file: '{}'".format(file_path))
 
@@ -163,6 +159,7 @@ class MetadataTable(Compress):
 			separator = self._separator
 
 		assert isinstance(file_path, basestring)
+		assert self.validate_dir(file_path, only_parent=True)
 		assert isinstance(separator, basestring)
 		assert isinstance(column_names, bool)
 		assert isinstance(compression_level, (int, long))

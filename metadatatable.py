@@ -169,7 +169,7 @@ class MetadataTable(Compress):
 		assert 0 <= compression_level < 10
 		assert exclude is None or isinstance(exclude, bool)
 		assert value_list is None or isinstance(value_list, list)
-		assert key_column_name is None or isinstance(value_list, basestring)
+		assert key_column_name is None or isinstance(key_column_name, basestring), "Invalid: {}".format(key_column_name)
 
 		if compression_level > 0:
 			file_handler = self.open(file_path, "w", compression_level)

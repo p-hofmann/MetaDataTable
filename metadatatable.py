@@ -1,9 +1,8 @@
 #!/usr/bin/env python
 
 __author__ = 'hofmann'
-__version__ = '0.0.6'
+__version__ = '0.0.7'
 
-import os
 import io
 import StringIO
 from scripts.Archive.compress import Compress

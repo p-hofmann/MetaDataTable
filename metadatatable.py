@@ -134,7 +134,7 @@ class MetadataTable(Compress):
 
 	def write(
 		self, file_path, separator=None, column_names=False, compression_level=0,
-		exclude=None, value_list=None, key_column_names=None):
+		exclude=None, value_list=None, key_column_name=None):
 		"""
 			Write tab separated files
 
@@ -152,8 +152,8 @@ class MetadataTable(Compress):
 			@type exclude: None | bool
 			@param value_list:
 			@type value_list: list[str|unicode]
-			@param key_column_names: column name of excluded or included rows
-			@type key_column_names: str | unicode
+			@param key_column_name: column name of excluded or included rows
+			@type key_column_name: str | unicode
 
 			@return: None
 			@rtype: None
@@ -169,7 +169,7 @@ class MetadataTable(Compress):
 		assert 0 <= compression_level < 10
 		assert exclude is None or isinstance(exclude, bool)
 		assert value_list is None or isinstance(value_list, list)
-		assert key_column_names is None or isinstance(value_list, basestring)
+		assert key_column_name is None or isinstance(value_list, basestring)
 
 		if compression_level > 0:
 			file_handler = self.open(file_path, "w", compression_level)
@@ -184,9 +184,9 @@ class MetadataTable(Compress):
 			file_handler.write(header + '\n')
 		for row_number in range(0, self._number_of_rows):
 			if exclude is not None:
-				if not exclude and self._meta_table[key_column_names][row_number] not in value_list:
+				if not exclude and self._meta_table[key_column_name][row_number] not in value_list:
 					continue
-				if exclude and self._meta_table[key_column_names][row_number] in value_list:
+				if exclude and self._meta_table[key_column_name][row_number] in value_list:
 					continue
 
 			row = []

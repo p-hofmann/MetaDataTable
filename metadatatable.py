@@ -68,7 +68,7 @@ class MetadataTable(Compress):
 
 	def parse_stream(self, stream_input, separator=None, column_names=False, comment_line=None):
 		"""
-			Reading comma or tab separated values in a file as table
+			Reading comma or tab separated values from a stream
 
 			@param stream_input: stream
 			@type stream_input: file | io.FileIO | StringIO.StringIO
@@ -79,7 +79,7 @@ class MetadataTable(Compress):
 			@param comment_line: character or list of character indication comment lines
 			@type comment_line: str | unicode | list[str|unicode]
 
-			@return: generator of dictionary representing rows
+			@return: Generator of dictionary representing rows
 			@rtype: generator[ dict[int|long|str|unicode, str|unicode] ]
 			#
 		"""

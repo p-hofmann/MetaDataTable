@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 __author__ = 'hofmann'
-__version__ = '0.0.7'
+__version__ = '0.0.8'
 
 import io
 import StringIO
@@ -58,6 +58,72 @@ class MetadataTable(Compress):
 				index = self._list_of_column_names.index(column_name)
 				self._list_of_column_names.pop(index)
 
+	def _parse_column_names(self, stream_input, separator):
+			row = stream_input.readline().rstrip('\n').rstrip('\r')
+			list_of_column_names = row.split(separator)
+			assert self._has_unique_columns(list_of_column_names), "Column names must be unique!"
+			self._list_of_column_names = list_of_column_names
+			for column_name in self._list_of_column_names:
+				self._meta_table[column_name] = []
+
+	def parse_stream(self, stream_input, separator=None, column_names=False, comment_line=None):
+		"""
+			Reading comma or tab separated values in a file as table
+
+			@param stream_input: stream
+			@type stream_input: file | io.FileIO | StringIO.StringIO
+			@param separator: default character assumed to separate values in a file
+			@type separator: str | unicode
+			@param column_names: True if column names available
+			@type column_names: bool
+			@param comment_line: character or list of character indication comment lines
+			@type comment_line: str | unicode | list[str|unicode]
+
+			@return: generator of dictionary representing rows
+			@rtype: generator[ dict[int|long|str|unicode, str|unicode] ]
+			#
+		"""
+		if comment_line is None:
+			comment_line = ['#']
+		elif isinstance(comment_line, basestring):
+			comment_line = [comment_line]
+
+		if separator is None:
+			separator = self._separator
+
+		assert self._is_stream(stream_input)
+		assert isinstance(separator, basestring)
+		assert isinstance(comment_line, list)
+		assert isinstance(column_names, bool)
+		self.clear()
+
+		# read column names
+		if column_names:
+			self._parse_column_names(stream_input, separator)
+
+		# read rows
+		dict_row = dict()
+		line_count = 0
+		for line in stream_input:
+			line_count += 1
+			row = line.rstrip('\n').rstrip('\r')
+			if line[0] in comment_line or len(row) == 0:
+				continue
+			self._number_of_rows += 1
+			row_cells = row.split(separator)
+			number_of_columns = len(self.get_column_names())
+			if number_of_columns != 0 and number_of_columns != len(row_cells):
+				msg = "Format error. Bad number of values in line {}".format(line_count)
+				self._logger.error(msg)
+				raise ValueError(msg)
+			for index, value in enumerate(row_cells):
+				if column_names:
+					column_name = self._list_of_column_names[index]
+				else:
+					column_name = index
+				dict_row[column_name] = row_cells[index].rstrip('\n').rstrip('\r')
+			yield dict_row
+
 	def read(self, file_path, separator=None, column_names=False, comment_line=None):
 		"""
 			Reading comma or tab separated values in a file as table
@@ -94,12 +160,7 @@ class MetadataTable(Compress):
 
 			# read column names
 			if column_names:
-				row = file_handler.readline().rstrip('\n').rstrip('\r')
-				list_of_column_names = row.split(separator)
-				assert self._has_unique_columns(list_of_column_names), "Column names must be unique!"
-				self._list_of_column_names = list_of_column_names
-				for column_name in self._list_of_column_names:
-					self._meta_table[column_name] = []
+				self._parse_column_names(file_handler, separator)
 
 			# read rows
 			row_count = 0
@@ -112,7 +173,7 @@ class MetadataTable(Compress):
 				row_cells = row.split(separator)
 				number_of_columns = len(self.get_column_names())
 				if number_of_columns != 0 and number_of_columns != len(row_cells):
-					msg = "Format error. Bad number of values in row {}".format(row_count)
+					msg = "Format error. Bad number of values in line {}".format(row_count)
 					self._logger.error(msg)
 					raise ValueError(msg)
 				for index, value in enumerate(row_cells):

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 __author__ = 'hofmann'
-__version__ = '0.0.8'
+__version__ = '0.0.9'
 
 import io
 import StringIO
@@ -65,6 +65,27 @@ class MetadataTable(Compress):
 			self._list_of_column_names = list_of_column_names
 			for column_name in self._list_of_column_names:
 				self._meta_table[column_name] = []
+
+	def parse_file(self, file_path, separator=None, column_names=False, comment_line=None):
+		"""
+			Reading comma or tab separated values from a file
+
+			@param file_path: path to file to be opened
+			@type file_path: str | unicode
+			@param separator: default character assumed to separate values in a file
+			@type separator: str | unicode
+			@param column_names: True if column names available
+			@type column_names: bool
+			@param comment_line: character or list of character indication comment lines
+			@type comment_line: str | unicode | list[str|unicode]
+
+			@return: Generator of dictionary representing rows
+			@rtype: generator[ dict[int|long|str|unicode, str|unicode] ]
+			#
+		"""
+		with self.open(file_path) as file_handler:
+			for row in self.parse_stream(file_handler, separator, column_names, comment_line):
+				yield row
 
 	def parse_stream(self, stream_input, separator=None, column_names=False, comment_line=None):
 		"""

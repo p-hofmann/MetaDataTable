@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 __author__ = 'hofmann'
-__version__ = '0.1.0'
+__version__ = '0.1.1'
 
 import io
 import StringIO
@@ -29,7 +29,7 @@ class MetadataTable(Compress):
 			@return: None
 			@rtype: None
 		"""
-		assert logfile is None or isinstance(logfile, basestring) or self._is_stream(logfile)
+		assert logfile is None or isinstance(logfile, basestring) or self.is_stream(logfile)
 		assert isinstance(separator, basestring), "separator must be string"
 		assert isinstance(verbose, bool), "verbose must be true or false"
 		super(MetadataTable, self).__init__(logfile=logfile, verbose=verbose)
@@ -114,7 +114,7 @@ class MetadataTable(Compress):
 		if separator is None:
 			separator = self._separator
 
-		assert self._is_stream(stream_input)
+		assert self.is_stream(stream_input)
 		assert isinstance(separator, basestring)
 		assert isinstance(comment_line, list)
 		assert isinstance(column_names, bool)
